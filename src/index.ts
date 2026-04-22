@@ -21,5 +21,6 @@ try {
     tls: false,
   });
 } catch (err) {
-  console.log(err);
+  if (err instanceof Error) console.error(err.message);
+  else console.error(`Failed to start server. ${err}`);
 }
