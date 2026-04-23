@@ -10,10 +10,9 @@ by the Design Project specification are:
 6. Client may upload a selected file
 
 ## Commands (RFC-959 4.1)
-The commands relevant for the scope of the project are (by category)
+  ### Relavant to Scope
   1. **Access Control**
   - User Name (USER)
-  - Password (PASS)
   - Change Working Directory (CWD)
   - Change to Parent Directory (CDUP)
   - Logout (QUIT)
@@ -29,8 +28,18 @@ The commands relevant for the scope of the project are (by category)
   - Make Directory (MKD)
   - Print Working Directory (PWD)
   - List (LIST)
+  ### Nice to have
+  1. **Access Control**
+  - Password (PASS)
+  2. **Services**
   - Help (HELP) # Optional: Nice to have
-  - NOOP (NOOP) # Optional: Helpful for testing
+  ### Required RFC-959 (5.1)
+  - QUIT
+  - PORT
+  - TYPE (ASCII NON-PRINT A N)
+  - MODE (STREAM S)
+  - STRU (FILE F) # RFC requires Record to be supported
+  - NOOP
 
 ## FTP Replies (RFC-959 4.2)
 ### Good, Bad, or Incomplete
