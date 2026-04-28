@@ -1,119 +1,122 @@
-# Import os library to work with files, folders, and paths
+"""
+File system helper functions for the FTP server.
+This file manages user folders, safe paths, virtual paths, and directory listing.
+"""
+
 import os
 
 
-# Default directories required for each FTP user
+# Default folders required for each FTP user
 DEFAULT_DIRECTORIES = ["docs", "images", "misc"]
 
-# Number of files that will be created inside each default directory
+# Number of default files created inside each default folder
 FILES_PER_DIRECTORY = 5
 
 
-# Function that creates the required file system for each user
 def create_user_filesystem(user_home):
+    """
+    Creates the required folder and file structure for a user.
+    """
 
-    # Convert the user's home directory into an absolute path
+    # Convert user home to absolute path
     user_home = os.path.abspath(user_home)
 
-    # Create the user home directory if it does not exist
+    # Create user's home directory
     os.makedirs(user_home, exist_ok=True)
 
-    # Loop through each default directory name
+    # Create default folders and files
     for folder in DEFAULT_DIRECTORIES:
 
-        # Create the full path for the current folder
+        # Build folder path
         folder_path = os.path.join(user_home, folder)
 
-        # Create the folder if it does not already exist
+        # Create folder
         os.makedirs(folder_path, exist_ok=True)
 
-        # Create five files inside each folder
+        # Create five sample files
         for i in range(1, FILES_PER_DIRECTORY + 1):
 
-            # Create the full file path
+            # Build file path
             file_path = os.path.join(folder_path, f"file{i}.txt")
 
-            # Only create the file if it does not already exist
+            # Only create file if it does not exist
             if not os.path.exists(file_path):
 
-                # Open the file in write mode
+                # Write sample content
                 with open(file_path, "w", encoding="utf-8") as file:
+                    file.write(
+                        f"This is file {i} inside the {folder} directory.\n"
+                    )
 
-                    # Write sample content inside the file
-                    file.write(f"This is file {i} inside the {folder} directory.\n")
 
-
-# Function that validates paths to prevent unauthorized access
 def safe_path(user_home, current_dir, requested_path):
+    """
+    Validates that a requested path stays inside the user's home directory.
+    Prevents directory traversal attacks such as ../../Admin.
+    """
 
-    # Convert the user's home directory into an absolute path
+    # Convert home to absolute path
     user_home = os.path.abspath(user_home)
 
-    # Check if the requested path starts from the virtual FTP root
+    # If FTP absolute path is used, start from user home
     if requested_path.startswith("/"):
-
-        # Build a path starting from the user's private home directory
         new_path = os.path.join(user_home, requested_path.lstrip("/"))
 
+    # Otherwise start from current directory
     else:
-
-        # Build a path starting from the user's current directory
         new_path = os.path.join(current_dir, requested_path)
 
-    # Convert the new path into an absolute path
+    # Convert requested path to absolute path
     new_path = os.path.abspath(new_path)
 
-    # Check if the new path is still inside the user's home directory
+    # Make sure new path stays inside user home
     if os.path.commonpath([user_home, new_path]) != user_home:
-
-        # Return None if the user is trying to leave their allowed directory
         return None
 
-    # Return the safe path if it is valid
+    # Return validated path
     return new_path
 
 
-# Function that converts a real system path into a virtual FTP path
 def get_virtual_path(user_home, current_dir):
+    """
+    Converts a real system path into a virtual FTP path.
+    """
 
-    # Get the path relative to the user's home directory
+    # Get relative path from user home
     relative_path = os.path.relpath(current_dir, user_home)
 
-    # If the relative path is ".", the user is at the FTP root
+    # Root directory appears as /
     if relative_path == ".":
-
-        # Return FTP virtual root
         return "/"
 
-    # Return the path using FTP-style forward slashes
+    # Convert Windows separators to FTP separators
     return "/" + relative_path.replace("\\", "/")
 
 
-# Function that lists files and folders inside the current directory
 def list_directory(current_dir):
+    """
+    Returns a formatted directory listing.
+    """
 
-    # Get all items inside the current directory
+    # Read items in current directory
     items = os.listdir(current_dir)
 
-    # Create an empty list to store formatted results
+    # Store formatted output
     result = []
 
-    # Loop through each item
+    # Format each item
     for item in items:
 
-        # Create the full path of the item
+        # Get full path
         item_path = os.path.join(current_dir, item)
 
-        # Check if the item is a directory
+        # Mark directories
         if os.path.isdir(item_path):
-
-            # Add directory label
             result.append(f"[DIR]  {item}")
 
+        # Mark files
         else:
-
-            # Add file label
             result.append(f"[FILE] {item}")
 
-    # Return the formatted directory list
+    # Return listing
     return result
