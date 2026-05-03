@@ -18,26 +18,12 @@ def send_response(conn, code, message):
     conn.sendall(response.encode())
 
 
-# 🔥 NUEVO (para FTP Windows)
 def handle_syst(conn, session, argument):
     send_response(conn, FTPStatus.COMMAND_OK, "UNIX Type: L8")
 
 
-def create_passive_socket():
-    for attempt in range(MAX_PASSIVE_PORT_ATTEMPTS):
-        data_port = random.randint(PASSIVE_PORT_MIN, PASSIVE_PORT_MAX)
-
-        try:
-            data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            data_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            data_socket.bind((HOST, data_port))
-            data_socket.listen(1)
-            return data_socket, data_port
-
-        except OSError:
-            data_socket.close()
-
-    return None, None
+def handle_opts(conn, session, argument):
+    send_response(conn, FTPStatus.COMMAND_OK, "UTF8 option accepted")
 
 
 def close_passive_socket(session):
@@ -115,7 +101,6 @@ def handle_pwd(conn, session, argument):
         return
 
     path = get_virtual_path(session["user_home"], session["current_dir"])
-
     send_response(conn, FTPStatus.PATHNAME_CREATED, f'"{path}"')
 
 
@@ -124,9 +109,11 @@ def handle_cwd(conn, session, argument):
         send_response(conn, FTPStatus.NOT_LOGGED_IN, "Please login first")
         return
 
-    new_path = safe_path(
-        session["user_home"], session["current_dir"], argument
-    )
+    if argument == "":
+        send_response(conn, FTPStatus.SYNTAX_ERROR, "Directory name required")
+        return
+
+    new_path = safe_path(session["user_home"], session["current_dir"], argument)
 
     if new_path and os.path.isdir(new_path):
         session["current_dir"] = new_path
@@ -137,13 +124,41 @@ def handle_cwd(conn, session, argument):
                       "Directory does not exist")
 
 
-def handle_list(conn, session, argument):
+def handle_port(conn, session, argument):
     if not session["logged_in"]:
         send_response(conn, FTPStatus.NOT_LOGGED_IN, "Please login first")
         return
 
-    send_response(conn, FTPStatus.FILE_STATUS_OK_OPENING_DATA_CONNECTION,
-                  "Opening data connection")
+    try:
+        values = argument.split(",")
+
+        if len(values) != 6:
+            raise ValueError
+
+        h1, h2, h3, h4, p1, p2 = values
+
+        active_host = f"{h1}.{h2}.{h3}.{h4}"
+        active_port = (int(p1) * 256) + int(p2)
+
+        reset_data_mode(session)
+
+        session["active_host"] = active_host
+        session["active_port"] = active_port
+
+        send_response(
+            conn,
+            FTPStatus.COMMAND_OK,
+            f"PORT command successful ({active_host}:{active_port})"
+        )
+
+    except ValueError:
+        send_response(conn, FTPStatus.SYNTAX_ERROR, "Invalid PORT syntax")
+
+
+def handle_list(conn, session, argument):
+    if not session["logged_in"]:
+        send_response(conn, FTPStatus.NOT_LOGGED_IN, "Please login first")
+        return
 
     data_conn = get_data_connection(session)
 
@@ -152,16 +167,25 @@ def handle_list(conn, session, argument):
                       "Use PASV or PORT first")
         return
 
-    items = list_directory(session["current_dir"])
-    listing = "\n".join(items) + "\n"
+    send_response(conn, FTPStatus.FILE_STATUS_OK_OPENING_DATA_CONNECTION,
+                  "Opening data connection")
 
-    data_conn.sendall(listing.encode())
-    data_conn.close()
+    try:
+        items = list_directory(session["current_dir"])
+        listing = "\r\n".join(items) + "\r\n"
 
-    finish_data_connection(session)
+        data_conn.sendall(listing.encode())
+        data_conn.close()
 
-    send_response(conn, FTPStatus.TRANSFER_COMPLETE,
-                  "Directory send OK")
+        finish_data_connection(session)
+
+        send_response(conn, FTPStatus.TRANSFER_COMPLETE,
+                      "Directory send OK")
+
+    except Exception as error:
+        finish_data_connection(session)
+        send_response(conn, FTPStatus.REQUESTED_ACTION_ABORTED,
+                      f"LIST failed: {error}")
 
 
 def handle_quit(conn, session, argument):
@@ -172,10 +196,9 @@ def handle_quit(conn, session, argument):
 
 def handle_help(conn, session, argument):
     send_response(conn, FTPStatus.COMMAND_OK,
-                  "Commands: USER PASS PWD CWD LIST QUIT")
+                  "Commands: USER PASS PWD CWD LIST NLST PORT QUIT")
 
 
-# 🔥 IMPORTANTE: aliases para Windows FTP
 COMMAND_HANDLERS = {
     "USER": handle_user,
     "PASS": handle_pass,
@@ -189,7 +212,10 @@ COMMAND_HANDLERS = {
     "LIST": handle_list,
     "NLST": handle_list,
 
+    "PORT": handle_port,
+
     "SYST": handle_syst,
+    "OPTS": handle_opts,
 
     "QUIT": handle_quit,
     "HELP": handle_help,
